@@ -11,6 +11,7 @@
 #define SYNTAX_ERROR 2
 #define SEMANTIC_ERROR 3
 #define OPERATIONAL_ERROR 4
+#define RUNTIME_ERROR 5
 
 #include <string>
 #include <sstream>
@@ -23,6 +24,11 @@
 #include <vector>
 
 using namespace std;
+
+//void yyerror(const char* c);
+void semError(string error);
+void operError(string error);
+
 
 //Defining our primitive types
 typedef enum {
@@ -48,7 +54,7 @@ typedef struct {
 	int offset;     // Token's offset in memory
 	int quad;       // Linenum that the token's exp will be printed in rsk
 	int RegNum;     // I register num the token is assigned to
-	
+	string value; // Value of the token (in case it represents a constant)
     // Function related attributes
 	vector<Type> paramTypes;  // Function's parameters type
 	vector<int>  paramRegs;   // Function's parameters registers number
@@ -69,15 +75,18 @@ class Function {
 	public:
 		// Flag to check whether function is defined yet
 		bool isDefined;
+
+		// Flag to check whether function is variadic
+		bool isVariadic;
 		
 		// The starting address in the buffer of the function implementation
 		int startLineImplementation;
 
-		// The starting index of optional parameters
-		int startIndexOptionalParams;
+		// The starting index of variadic parameters
+		int startIndexVariadicParams;
 		
-		// The total number of optional parameters
-		int numOptionalParams;
+		// The total number of variadic parameters
+		int numVariadicParams;
 
 		// The types of parameters of the function
 		vector<Type> paramTypes;
@@ -144,6 +153,27 @@ class Buffer {
 static Buffer* buffer;                          // CodeGen buffer
 static map<string, Symbol> symbolTable;			// Table that contains all symbols defined in prog
 static map<string, Function> functionTable;		// Table that contains all functions - each function with it's members
+static Buffer mainBuffer; // main function buffer
+
+static int currScopeIntRegNum = 3; //first 3 is reserved for return address, beggining of the stuck and top od the stuck
+
+static int currScopeFloatRegNum = 3; //first 3 is reserved for return address, beggining of the stuck and top od the stuck
+
+static int currScopeDepth = 0; //holds the depth of the current scope
+
+static int currScopeRetType; // holds the return type of this scoped
+
+static int currScopeOffset; // holds the return type of this scoped
+
+static int preScopeOffset; // holds the return type of this scoped
+
+static int currentReturnType; 
+
+static int currFuncVarArgCnt = 0; //holds the number of variadic arguments in this curr function
+
+static vector<string> currParamInOrder; // curr order of parameters for the current function
+static vector<string> tmpParamInOrder; // temp order of parameters for the current function
+
 /**********************************************************************************************/
 
 #endif

@@ -2,16 +2,13 @@
 // Declarations
 #include <stdio.h>
 #include <string.h>
-#include "part2.h"
-#include "part2.tab.h"
-#include "part2_helpers.h"
+#include "part3_helpers.hpp"
+#include "part3.tab.hpp"
 
 void print_str();
-int yywrap() {
-    return 1;  // Indicates end of input
-}
+
 %}
-%option yylineno
+%option yylineno noyywrap
 
 
 digit       [0-9]
@@ -37,7 +34,6 @@ comment     "#"[^\n]*
 %%
 
 {keywords} {
-                    yylval = makeNode(yytext, NULL, NULL);
                     if(strcmp( yytext ,"int") == 0)
                         return tk_int;
                     if(strcmp(yytext , "float") == 0)
@@ -64,63 +60,59 @@ comment     "#"[^\n]*
                         return tk_return;                       
 }
 {symbols}  {
-                    yylval = makeNode (yytext, NULL, NULL);
-					// printf("Char is %c",yytext[0]);
+                    yylval.name = yytext;
                     return yytext[0];
 }
 
 {integernum}  {
-                    yylval = makeNode("integernum", yytext, NULL);
-                    //printf("int_num %s", yytext); 
+                    yylval.name = yytext;
                     return tk_int_num;
 }
 {realnum}     {
-                    yylval = makeNode("realnum", yytext, NULL);
-                    //printf("real_num %s", yytext); 
+                    yylval.name = yytext; 
                     return tk_real_num;
 }
 {id}       {
-                    yylval = makeNode("id", yytext, NULL); 
+                    yylval.name = yytext; 
                     return tk_id;
 }         
 {relop}    {
-                    yylval = makeNode("relop", yytext , NULL); 
+                    yylval.name = yytext; 
                     return tk_relop;
 }         
 {addop}    {
-                    yylval = makeNode("addop" , yytext , NULL);
+                    yylval.name = yytext;
                     return tk_addop; 
 }         
 {mulop}    {
-                    yylval = makeNode("mulop" , yytext , NULL); 
+                    yylval.name = yytext; 
                     return tk_mulop;
 }         
 {assign}   {
-                    yylval = makeNode("assign" , yytext , NULL);
+                    yylval.name = yytext;
                     return tk_assign;
 }         
 {and}      {
-                    yylval = makeNode("and" , yytext , NULL);
+                    yylval.name = yytext;
                     return tk_and;
 }         
 {or}       {
-                    yylval = makeNode("or" , yytext, NULL);
+                    yylval.name = yytext;
                     return tk_or;
 }         
 {not}      {
-                    yylval = makeNode("not" , yytext, NULL); 
+                    yylval.name = yytext; 
                     return tk_not;
 }         
 {str}       {   
                     char* string = yytext;
                     string++;
                     string[yyleng - 2] = '\0';
-                    yylval = makeNode("str" , string , NULL);
+                    yylval.name = string;
                     return tk_str;
 } 
 "..."		 {
-					yylval = makeNode("...", NULL , NULL);
-                    //printf(yytext);
+					yylval.name = "...";
 					return tk_ellipsis;
 }       
 {comment}           ;  // Ignore comments

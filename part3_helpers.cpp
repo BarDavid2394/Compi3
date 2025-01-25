@@ -1,5 +1,6 @@
 #include "part3_helpers.hpp"
-
+extern void yylex_destroy();
+extern int yyparse(void);
 
 Buffer::Buffer(){
 	data.clear();
