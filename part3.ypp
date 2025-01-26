@@ -106,7 +106,7 @@ FUNC_DEC_API : TYPE tk_id '(' ')' ';'
 			Function newFunction;
 			newFunction.returnType = $1.type;
 			newFunction.startIndexVariadicParams = 0;
-			newFunction.numVariadicParams = 0;
+			newFunction.indexNumVAParams = 0;
 			newFunction.isDefined = false;
 			newFunction.paramTypes.clear();
 			newFunction.isVariadic = false;
@@ -142,7 +142,7 @@ FUNC_DEC_API : TYPE tk_id '(' ')' ';'
 			Function newFunction;
 			newFunction.returnType = $1.type;
 			newFunction.startIndexVariadicParams = 0;
-			newFunction.numVariadicParams = 0;
+			newFunction.indexNumVAParams = 0;
 			newFunction.isDefined = false;
 			newFunction.paramTypes = tempParamTypes;
 			newFunction.isVariadic = false;
@@ -183,8 +183,8 @@ FUNC_DEC_API : TYPE tk_id '(' ')' ';'
 			}
 			Function newFunction;
 			newFunction.returnType = $1.type;
-			newFunction.startIndexVariadicParams = 0;
-			newFunction.numVariadicParams = 0;
+			newFunction.startIndexVariadicParams = tempParamTypes.size();
+			newFunction.indexNumVAParams = tempParamTypes.size() - 1;
 			newFunction.isDefined = false;
 			newFunction.paramTypes = tempParamTypes;
 			newFunction.isVariadic = true;
@@ -221,7 +221,7 @@ FUNC_DEF_API : TYPE tk_id '(' ')'
 			newFunction.returnType = $1.type;
 			newFunction.startLineImplementation = buffer->nextQuad();
 			newFunction.startIndexVariadicParams = 0;
-			newFunction.numVariadicParams = 0;
+			newFunction.indexNumVAParams = 0;
 			newFunction.isDefined = false;
 			newFunction.paramTypes.clear();
 			newFunction.isVariadic = false;
@@ -261,7 +261,7 @@ FUNC_DEF_API : TYPE tk_id '(' ')'
 			Function newFunction;
 			newFunction.returnType = $1.type;
 			newFunction.startIndexVariadicParams = 0;
-			newFunction.numVariadicParams = 0;
+			newFunction.indexNumVAParams = 0;
 			newFunction.startLineImplementation = buffer->nextQuad();
 			newFunction.isDefined = false;
 			newFunction.paramTypes = tempParamTypes;
@@ -307,8 +307,8 @@ FUNC_DEF_API : TYPE tk_id '(' ')'
 			}
 			Function newFunction;
 			newFunction.returnType = $1.type;
-			newFunction.startIndexVariadicParams = 0;
-			newFunction.numVariadicParams = 0;
+			newFunction.startIndexVariadicParams = tempParamTypes.size();
+			newFunction.indexNumVAParams = tempParamTypes.size() - 1;
 			newFunction.startLineImplementation = buffer->nextQuad();
 			newFunction.isDefined = false;
 			newFunction.paramTypes = tempParamTypes;
@@ -910,7 +910,7 @@ EXP : EXP tk_addop EXP
 	}
 	| VA_MATERIALISE
 	{
-
+		
 	}
 ;
 
@@ -1050,7 +1050,7 @@ VA_MATERIALISE : tk_va_arg '(' TYPE ',' EXP ')'
 		if($3.type == void_t){
 			semError("cannot call va_arg with void_t type");
 		}
-		
+
 
 	}
 ;

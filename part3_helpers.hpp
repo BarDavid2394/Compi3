@@ -85,8 +85,8 @@ class Function {
 		// The starting index of variadic parameters
 		int startIndexVariadicParams;
 		
-		// The total number of variadic parameters
-		int numVariadicParams;
+		// The index of the number of variadic parameters parameter
+		int indexNumVAParams;
 
 		// The types of parameters of the function
 		vector<Type> paramTypes;
@@ -168,6 +168,8 @@ static int currScopeOffset; // holds the return type of this scoped
 static int preScopeOffset; // holds the return type of this scoped
 
 static int currentReturnType; 
+
+static string currFuncName; //holds
 
 static int currFuncVarArgCnt = 0; //holds the number of variadic arguments in this curr function
 
