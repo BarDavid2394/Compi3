@@ -125,7 +125,7 @@ FUNC_DEC_API : TYPE tk_id '(' ')' ';'
 			if (functionTable[$2.name].returnType != $1.type){ // check match in return type
 				semError("mismatch in function '" + $2.name + "' return type");
 			}
-			else if (functionTable[$2.name].paramTypes.size() != 0){ // check match in paramters number
+			else if (functionTable[$2.name].paramTypes != $4.paramTypes){ // check match in paramters number
 				semError("Mismatch in function '" + $2.name + "' parameters");
 			}
 		}
@@ -164,7 +164,7 @@ FUNC_DEC_API : TYPE tk_id '(' ')' ';'
 			if (functionTable[$2.name].returnType != $1.type){ // check match in return type
 				semError("mismatch in function '" + $2.name + "' return type");
 			}
-			else if (functionTable[$2.name].paramTypes.size() != 0){ // check match in paramters number
+			else if (functionTable[$2.name].paramTypes != $4.paramTypes){ // check match in paramters number
 				semError("Mismatch in function '" + $2.name + "' parameters");
 			}
 			else if(!functionTable[$2.name].isVariadic){ //check that the function is variadic in function table
@@ -244,7 +244,7 @@ FUNC_DEF_API : TYPE tk_id '(' ')'
 			if (functionTable[$2.name].returnType != $1.type){ // check match in return type
 				semError("mismatch in function '" + $2.name + "' return type");
 			}
-			else if (functionTable[$2.name].paramTypes.size() != 0){ // check match in paramters number
+			else if (functionTable[$2.name].paramTypes != $4.paramTypes){ // check match in paramters number
 				semError("Mismatch in function '" + $2.name + "' parameters");
 			}
 		}
@@ -288,7 +288,7 @@ FUNC_DEF_API : TYPE tk_id '(' ')'
 			if (functionTable[$2.name].returnType != $1.type){ // check match in return type
 				semError("mismatch in function '" + $2.name + "' return type");
 			}
-			else if (functionTable[$2.name].paramTypes.size() != 0){ // check match in paramters number
+			else if (functionTable[$2.name].paramTypes != $4.paramTypes){ // check match in paramters number
 				semError("Mismatch in function '" + $2.name + "' parameters");
 			}
 			else if(!functionTable[$2.name].isVariadic){ //check that the function is variadic in function table
