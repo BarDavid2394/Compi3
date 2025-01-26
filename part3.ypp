@@ -643,14 +643,14 @@ LVAL : tk_id
 ;
 
 
-CNTRL : tk_if BEXP tk_then M STMT N tk_else M STMT
+CNTRL : tk_if BEXP tk_then M STMT tk_else N M STMT
 	{
  		buffer->backpatch($2.trueList, $4.quad);
 		buffer->backpatch($2.falseList, $8.quad);
-		$$.nextList = merge<int>($5.nextList, $6.nextList);
+		$$.nextList = merge<int>($5.nextList, $7.nextList);
 		$$.nextList = merge<int>($$.nextList, $9.nextList);
 		$5.nextList.clear();
-		$6.nextList.clear();
+		$7.nextList.clear();
 		$9.nextList.clear();
 	}
 	| tk_if BEXP tk_then M STMT
