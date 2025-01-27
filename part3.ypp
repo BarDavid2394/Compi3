@@ -281,7 +281,7 @@ FUNC_DEF_API : TYPE tk_id '(' ')'
 		if ($2.name == "main"){
 			semError("Main function must be in this format: void main();");
 		}
-		if (functionTable.find($2.name) != functionTable.end()) { // function already declered
+		if (functionTable.find($2.name) != functionTable.end()) { // function already declared
 			if (functionTable[$2.name].isDefined){ // check if function has been already implemented
 				semError("Function '" + $2.name + "' had been already implemented");
 			}
@@ -295,7 +295,7 @@ FUNC_DEF_API : TYPE tk_id '(' ')'
 				semError("Mismatch in function '" + $2.name + "': supposed to be variadic");
 			}
 		}
-		else {// function hasn't been declered yet, inset it to funciton table and save non variadic arguments to stack
+		else {// function hasn't been declared yet, inset it to function table and save non variadic arguments to stack
 			int offset = -4;
 			vector<Type> tempParamTypes;
 			for (int i=0 ; i < currParamInOrder.size(); i++){
@@ -644,15 +644,15 @@ LVAL : tk_id
 
 
 CNTRL : tk_if BEXP tk_then M STMT tk_else N M STMT
-	{
- 		buffer->backpatch($2.trueList, $4.quad);
-		buffer->backpatch($2.falseList, $8.quad);
-		$$.nextList = merge<int>($5.nextList, $7.nextList);
-		$$.nextList = merge<int>($$.nextList, $9.nextList);
-		$5.nextList.clear();
-		$7.nextList.clear();
-		$9.nextList.clear();
-	}
+        {
+        buffer->backpatch($2.trueList, $4.quad);
+        buffer->backpatch($2.falseList, $8.quad);
+        $$.nextList = merge<int>($5.nextList, $7.nextList);
+        $$.nextList = merge<int>($$.nextList, $9.nextList);
+        $5.nextList.clear();
+        $7.nextList.clear();
+        $9.nextList.clear();
+	    }
 	| tk_if BEXP tk_then M STMT
 	{
  		buffer->backpatch($2.trueList, $4.quad);
@@ -937,11 +937,30 @@ CALL : tk_id '(' CALL_ARGS ')'
 		Function callFunc = functionTable[funcName];
 		//validate number of arguments in calling for a function
 		int numberOfArgs = $3.paramTypes.size();
-		int expectedNumOfArgs = callFunc.paramTypes.size(); 
-		if(numberOfArgs != expectedNumOfArgs)
-		{
-			semError("Mismatch in number of args in call of function '" + funcName + "'");
-		}
+		int expectedNumOfArgs = callFunc.paramTypes.size();
+
+        if (callFunc.isVariadic){
+            // Handle variadic functions
+            int nonVariadicParamCount = expectedNumOfArgs; // Number of fixed parameters
+            if (numberOfArgs < nonVariadicParamCount) {
+            semError("Too few arguments in call to variadic function '" + funcName + "'");
+            }
+
+            // Calculate the number of variadic parameters
+            int variadicParamCount = numberOfArgs - nonVariadicParamCount;
+
+            // Update the number of variadic parameters
+            functionTable[funcName].numVariadicParams = variadicParamCount;
+
+            // Emit code to save the number of variadic parameters in the stack
+            int indexNumVAParams = functionTable[funcName].indexNumVAParams;
+            buffer->emit("STORI I" + intToString(variadicParamCount) + " I2 " + intToString(indexNumVAParams * 4));
+        } else {
+            // Handle non-variadic functions
+            if (numberOfArgs != expectedNumOfArgs) {
+            semError("Mismatch in number of args in call of function '" + funcName + "'");
+            }
+        }
 		//validate the types of the arguments
 		for (int i = 0; i < numberOfArgs; i++){
 			if ($3.paramTypes[i] != callFunc.paramTypes[i]){
@@ -1050,9 +1069,25 @@ VA_MATERIALISE : tk_va_arg '(' TYPE ',' EXP ')'
 		if($3.type == void_t){
 			semError("cannot call va_arg with void_t type");
 		}
+        if(!functionTable[currentFunctionName].isVariadic){
+            semError("va_arg can only be used in variadic functions");
+        }
+        if($5.RegNum < 0 || $4.RegNum >= functionTable[currentFunctionName].numVariadicParams){
+            semError("Index out of bound in va_arg");
+        }
+        $$.type = $2.type;
+        if ($2.type == int_) {
+            $$.RegNum = currScopeIntRegNum++;
+            buffer->emit("LOADI I" + intToString($$.RegNum) +
+            " I1 " + intToString($4.RegNum * 4 + functionTable[currentFunctionName].startIndexVAParams * 4));
+        } else if ($2.type == float_) {
+            $$.RegNum = currScopeFloatRegNum++;
+            buffer->emit("LOADF F" + intToString($$.RegNum) +
+            " I1 " + intToString($4.RegNum * 4 + functionTable[currentFunctionName].startIndexVAParams * 4));
+}
 
 
-	}
+}
 ;
 
 CALL_ARGS : CALL_ARGLIST
@@ -1153,6 +1188,11 @@ int main(int argc, char *argv[])
             if (it->second.isDefined) { // add implemented functions to the impl list
                 impl += " " + it->first + "," + intToString(it->second.startLineImplementation);
             }
+                if (it->second.isVariadic) {
+                    impl += ",variadic," + intToString(it->second.startIndexVAParams) +
+                            "," + intToString(it->second.indexNumVAParams) +
+                            "," + intToString(it->second.numVariadicParams);
+                }
             else { //add unimplemented functions to the unImpl list
                 unImpl += " " + it->first;
                 for (int i = 0; i < it->second.callingLines.size(); i++) {
