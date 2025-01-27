@@ -60,7 +60,7 @@ PROGRAM : FDEFS
 FDEFS : FDEFS FUNC_DEF_API BLK
     {
         if (functionTable[$2.name].isDefined){
-			semError("already isDefined function '" + $2.name + "'\n");
+			semError("already defined function '" + $2.name + "'\n");
 		}
 		else { // if the function is not implemented
 			functionTable[$2.name].isDefined = true;
@@ -185,6 +185,7 @@ FUNC_DEC_API : TYPE tk_id '(' ')' ';'
 			newFunction.returnType = $1.type;
 			newFunction.startIndexVariadicParams = tempParamTypes.size();
 			newFunction.indexNumVAParams = tempParamTypes.size() - 1;
+			newFunction.numVariadicParams = -1;
 			newFunction.isDefined = false;
 			newFunction.paramTypes = tempParamTypes;
 			newFunction.isVariadic = true;
@@ -309,6 +310,7 @@ FUNC_DEF_API : TYPE tk_id '(' ')'
 			newFunction.returnType = $1.type;
 			newFunction.startIndexVariadicParams = tempParamTypes.size();
 			newFunction.indexNumVAParams = tempParamTypes.size() - 1;
+			newFunction.numVariadicParams = -1;
 			newFunction.startLineImplementation = buffer->nextQuad();
 			newFunction.isDefined = false;
 			newFunction.paramTypes = tempParamTypes;
@@ -597,7 +599,7 @@ ASSN : LVAL tk_assign EXP ';'
 
 		// check that the types are equal
 		if (lvalType != rvalType) {
-			semError("incompatible type of argument ");
+			semError("incompatible type of argument '" + $1.name + "'");
 		}
 		else if (lvalType == void_t) {
 			semError("void type cannot be used for this action");
@@ -739,32 +741,32 @@ BEXP : BEXP tk_or M BEXP
 			$$.falseList.push_back(buffer->nextQuad() + 2);
 			int tempReg = currScopeFloatRegNum++;
 			if ($2.name == "==") { //set equal command
-				buffer->emit("SEQUF F" + intToString($$.RegNum) + " F" + intToString($1.RegNum) + " F" + intToString($3.RegNum));
+				buffer->emit("SEQUF F" + intToString(tempReg) + " F" + intToString($1.RegNum) + " F" + intToString($3.RegNum));
 				buffer->emit("CFTOI I" + intToString($$.RegNum) + " F" + intToString(tempReg));
 				buffer->emit("BREQZ I" + intToString($$.RegNum) + " "); // falseList
 			}
 			else if ($2.name == "<>") { // set not equal command
-				buffer->emit("SNEQF F" + intToString($$.RegNum) + " F" + intToString($1.RegNum) + " F" + intToString($3.RegNum));
+				buffer->emit("SNEQF F" + intToString(tempReg) + " F" + intToString($1.RegNum) + " F" + intToString($3.RegNum));
 				buffer->emit("CFTOI I" + intToString($$.RegNum) + " F" + intToString(tempReg));
 				buffer->emit("BREQZ I" + intToString($$.RegNum) + " "); // falseList
 			}
 			else if ($2.name == "<") { // set less than command
-				buffer->emit("SLETF F" + intToString($$.RegNum) + " F" + intToString($1.RegNum) + " F" + intToString($3.RegNum));
+				buffer->emit("SLETF F" + intToString(tempReg) + " F" + intToString($1.RegNum) + " F" + intToString($3.RegNum));
 				buffer->emit("CFTOI I" + intToString($$.RegNum) + " F" + intToString(tempReg));
 				buffer->emit("BREQZ I" + intToString($$.RegNum) + " "); // falseList
 			}
 			else if ($2.name == "<=") { // set less than or equal to command
-				buffer->emit("SGRTF F" + intToString($$.RegNum) + " F" + intToString($1.RegNum) + " F" + intToString($3.RegNum));
+				buffer->emit("SGRTF F" + intToString(tempReg) + " F" + intToString($1.RegNum) + " F" + intToString($3.RegNum));
 				buffer->emit("CFTOI I" + intToString($$.RegNum) + " F" + intToString(tempReg));
 				buffer->emit("BNEQZ I" + intToString($$.RegNum) + " "); // falseList, jump if reg!=0
 			}
 			else if ($2.name == ">") { // set greaterthan command
-				buffer->emit("SGRTF F" + intToString($$.RegNum) + " F" + intToString($1.RegNum) + " F" + intToString($3.RegNum));
+				buffer->emit("SGRTF F" + intToString(tempReg) + " F" + intToString($1.RegNum) + " F" + intToString($3.RegNum));
 				buffer->emit("CFTOI I" + intToString($$.RegNum) + " F" + intToString(tempReg));
 				buffer->emit("BREQZ I" + intToString($$.RegNum) + " "); // falseList, jump if reg==0
 			}
 			else if ($2.name == ">=") { // set greaterthan or equal to command
-				buffer->emit("SLETI F" + intToString($$.RegNum) + " F" + intToString($1.RegNum) + " F" + intToString($3.RegNum));
+				buffer->emit("SLETI F" + intToString(tempReg) + " F" + intToString($1.RegNum) + " F" + intToString($3.RegNum));
 				buffer->emit("CFTOI I" + intToString($$.RegNum) + " F" + intToString(tempReg));
 				buffer->emit("BNEQZ I" + intToString($$.RegNum) + " "); // falseList, jump if reg!=0
 			}
@@ -827,7 +829,7 @@ EXP : EXP tk_addop EXP
 		}
 		if ($1.type == float_){
 			$$.RegNum = currScopeFloatRegNum++;
-			if ($2.name == "+") { // addition action
+			if ($2.name == "*") { // multiple action
 				buffer->emit("MULTF F" + intToString($$.RegNum) + " F" + intToString($1.RegNum) + " F" + intToString($3.RegNum));
 			}
 			else { // subtract action
@@ -1010,6 +1012,9 @@ CALL : tk_id '(' CALL_ARGS ')'
 		}
 		// save the function address
 		functionTable[funcName].callingLines.push_back(buffer->nextQuad()); 
+		// save the function name
+		string prevFuncName = currentFunctionName;
+		currentFunctionName = funcName;
 		// make the function call 
 		buffer->emit("JLINK ");
 
@@ -1017,6 +1022,8 @@ CALL : tk_id '(' CALL_ARGS ')'
 
 		// back from the function, set all parameters back
 		buffer->emit("COPYI I2 I1"); // return the stuck pointer to it's original value
+		//restore previos funciton name
+		currentFunctionName = prevFuncName;
 
 		//get return value from the stack
 		if (functionTable[funcName].returnType == int_){
@@ -1079,11 +1086,11 @@ VA_MATERIALISE : tk_va_arg '(' TYPE ',' EXP ')'
         if ($2.type == int_) {
             $$.RegNum = currScopeIntRegNum++;
             buffer->emit("LOADI I" + intToString($$.RegNum) +
-            " I1 " + intToString($4.RegNum * 4 + functionTable[currentFunctionName].startIndexVAParams * 4));
+            " I1 " + intToString($4.RegNum * 4 + functionTable[currentFunctionName].startIndexVariadicParams * 4));
         } else if ($2.type == float_) {
             $$.RegNum = currScopeFloatRegNum++;
             buffer->emit("LOADF F" + intToString($$.RegNum) +
-            " I1 " + intToString($4.RegNum * 4 + functionTable[currentFunctionName].startIndexVAParams * 4));
+            " I1 " + intToString($4.RegNum * 4 + functionTable[currentFunctionName].startIndexVariadicParams * 4));
 }
 
 
@@ -1187,12 +1194,12 @@ int main(int argc, char *argv[])
         for(map<string, Function>::iterator it = functionTable.begin(); it != functionTable.end(); it++) {
             if (it->second.isDefined) { // add implemented functions to the impl list
                 impl += " " + it->first + "," + intToString(it->second.startLineImplementation);
-            }
                 if (it->second.isVariadic) {
-                    impl += ",variadic," + intToString(it->second.startIndexVAParams) +
+                    impl += ",variadic," + intToString(it->second.startIndexVariadicParams) +
                             "," + intToString(it->second.indexNumVAParams) +
                             "," + intToString(it->second.numVariadicParams);
                 }
+			}
             else { //add unimplemented functions to the unImpl list
                 unImpl += " " + it->first;
                 for (int i = 0; i < it->second.callingLines.size(); i++) {
