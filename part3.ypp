@@ -229,6 +229,7 @@ FUNC_DEF_API : TYPE tk_id '(' ')'
 			functionTable[$2.name] = newFunction;
 
 		}
+		currentFunctionName = $2.name;
 		currentReturnType = $1.type;
 		$$.name = $2.name;
 		$$.type = $1.type;
@@ -273,6 +274,7 @@ FUNC_DEF_API : TYPE tk_id '(' ')'
 			// return current scope offset
 			currScopeOffset = currScopeOffset + offset + 4;
 		}
+		currentFunctionName = $2.name;
 		currentReturnType = $1.type;
 		$$.name = $2.name;
 		$$.type = $1.type;
@@ -321,6 +323,7 @@ FUNC_DEF_API : TYPE tk_id '(' ')'
 			// return current scope offset
 			currScopeOffset = currScopeOffset + offset + 4;
 		}
+		currentFunctionName = $2.name;
 		currentReturnType = $1.type;
 		$$.name = $2.name;
 		$$.type = $1.type;
@@ -912,7 +915,8 @@ EXP : EXP tk_addop EXP
 	}
 	| VA_MATERIALISE
 	{
-		
+		$$.type = $1.type;
+        $$.RegNum = $1.RegNum;
 	}
 ;
 
@@ -931,169 +935,165 @@ NUM : tk_int_num
 
 
 CALL : tk_id '(' CALL_ARGS ')'
-	{
- 		string funcName = $1.name; //function name
-		if ( functionTable.find(funcName) == functionTable.end()){ // validate function decleration
-			semError("Function '" + funcName + "' is not declared");
-		}
-		Function callFunc = functionTable[funcName];
-		//validate number of arguments in calling for a function
-		int numberOfArgs = $3.paramTypes.size();
-		int expectedNumOfArgs = callFunc.paramTypes.size();
+{
+    string funcName = $1.name;
+    if (functionTable.find(funcName) == functionTable.end()) {
+        semError("Function '" + funcName + "' is not declared");
+    }
+    
+    Function& callFunc = functionTable[funcName];
+    int numberOfArgs = $3.paramTypes.size();
+    int expectedNumOfArgs = callFunc.paramTypes.size();
+	int VAparams;
 
-        if (callFunc.isVariadic){
-            // Handle variadic functions
-            int nonVariadicParamCount = expectedNumOfArgs; // Number of fixed parameters
-            if (numberOfArgs < nonVariadicParamCount) {
+    // Validate arguments
+    if (callFunc.isVariadic) {
+        int fixedParamCount = expectedNumOfArgs;
+        if (numberOfArgs < fixedParamCount) {
             semError("Too few arguments in call to variadic function '" + funcName + "'");
-            }
-
-            // Calculate the number of variadic parameters
-            int variadicParamCount = numberOfArgs - nonVariadicParamCount;
-
-            // Update the number of variadic parameters
-            functionTable[funcName].numVariadicParams = variadicParamCount;
-
-            // Emit code to save the number of variadic parameters in the stack
-            int indexNumVAParams = functionTable[funcName].indexNumVAParams;
-            buffer->emit("STORI I" + intToString(variadicParamCount) + " I2 " + intToString(indexNumVAParams * 4));
-        } else {
-            // Handle non-variadic functions
-            if (numberOfArgs != expectedNumOfArgs) {
-            semError("Mismatch in number of args in call of function '" + funcName + "'");
-            }
         }
-		//validate the types of the arguments
-		for (int i = 0; i < numberOfArgs; i++){
-			if ($3.paramTypes[i] != callFunc.paramTypes[i]){
-				semError("Mismatch type of argument in call of function '" + funcName + "'");
-			}
-		}
-		//saving the this functions register to the stack
-		buffer->emit("CITOF F2 I2");
-		int offset = 0 ;
-		int maxRegs = max(currScopeIntRegNum, currScopeFloatRegNum);
-		for (int i = 0; i < maxRegs; i++){
-			if (i < currScopeIntRegNum){
-				buffer->emit("STORI I" + intToString(i) + " I2 " + intToString(offset));
-			}
-			if (i < currScopeFloatRegNum){
-				buffer->emit("STORF F" + intToString(i) + " F2 " + intToString(offset));
-			}
+		VAparams = numberOfArgs - fixedParamCount;
+        functionTable[funcName].numVariadicParams = VAparams;
+    } else if (numberOfArgs != expectedNumOfArgs) {
+        semError("Mismatch in number of args in call of function '" + funcName + "'");
+    }
+
+    // Type checking
+    for (int i = 0; i < (callFunc.isVariadic ? expectedNumOfArgs : numberOfArgs); i++) {
+        if ($3.paramTypes[i] != callFunc.paramTypes[i]) {
+            semError("Mismatch type of argument in call of function '" + funcName + "'");
+        }
+    }
+
+    // Save current registers
+    int offset = 0;
+	//int tempReg = currentScopeRegsNumInt++;
+	//buffer->emit("COPYI I" + intToString(tempReg) + " " + intToString(VAparams));
+
+    buffer->emit("CITOF F2 I2");
+    int maxRegs = max(currScopeIntRegNum, currScopeFloatRegNum);
+
+    for (int i = 0; i < maxRegs; i++) {
+        if (i < currScopeIntRegNum) {
+            buffer->emit("STORI I" + intToString(i) + " I2 " + intToString(offset));
+        }
+        if (i < currScopeFloatRegNum) {
+            buffer->emit("STORF F" + intToString(i) + " F2 " + intToString(offset));
+        }
+        offset += 4;
+    }
+    
+    offset += 4;  // Return value space
+	int paramsCurrentOffset = -4;
+	int paramCount = $3.paramRegs.size();
+	vector<Type> paramTypes = $3.paramTypes;
+	vector<int> paramRegs = $3.paramRegs;
+	vector<int> paramOffsets;
+
+	// calculate the size of the stack with all the arguments
+	for (int i = 0; i < paramCount; i++){
+		if (paramTypes[i] == int_){
 			offset += 4;
+			paramsCurrentOffset -= 4;
 		}
-		offset += 4; // for return address
-
-		int paramsCurrentOffset = -4; //for return address
-		int paramCount = $3.paramRegs.size();
-		vector<int> paramRegs = $3.paramRegs;
-		vector<Type> paramTypes = $3.paramTypes;
-		vector<int> paramOffsets;
-		for (int i = 0; i < paramCount; i++){ 
-			if (paramTypes[i] != void_t){
-				offset += 4;
-				paramsCurrentOffset -= 4;
-			}
-			paramOffsets.push_back(paramsCurrentOffset);
-		}
-		buffer->emit("ADD2I I2 I2 " + intToString(offset)); // update the stack pointer (I2)
-		currScopeOffset += offset;
-		buffer->emit("COPYI I1 I2"); // set I1 to the top of the stuck (first argument)
-		buffer->emit("CITOF F1 I1");
-
-		//push all arguments to the stuck
-		for (int i = 0; i < paramCount; i++){
-			if (paramTypes[i] == int_){
-				buffer->emit("STORI I" + intToString(paramRegs[i]) + " I1 " + intToString(paramOffsets[i]));
-			}
-			else if (paramTypes[i] == float_){
-				buffer->emit("STORF F" + intToString(paramRegs[i]) + " F1 " + intToString(paramOffsets[i]));
-			}
-		}
-		// save the function address
-		functionTable[funcName].callingLines.push_back(buffer->nextQuad()); 
-		// save the function name
-		string prevFuncName = currentFunctionName;
-		currentFunctionName = funcName;
-		// make the function call 
-		buffer->emit("JLINK ");
-
-
-
-		// back from the function, set all parameters back
-		buffer->emit("COPYI I2 I1"); // return the stuck pointer to it's original value
-		//restore previos funciton name
-		currentFunctionName = prevFuncName;
-
-		//get return value from the stack
-		if (functionTable[funcName].returnType == int_){
-			$$.type = int_;
-			$$.RegNum = currScopeIntRegNum;
-			buffer->emit("LOADI I" + intToString($$.RegNum) + " I1 -4");
-		}
-		else if (functionTable[funcName].returnType == float_){
-			$$.type = float_;
-			$$.RegNum = currScopeFloatRegNum;
-			buffer->emit("CITOF F1 I1");
-			buffer->emit("LOADF F" + intToString($$.RegNum) + " F1 -4");
-		}
-		else { // return type is void
-			$$.type = void_t;
-		}
-
-		buffer->emit("SUBTI I2 I2 " + intToString(offset)); //close the stuck for this function
-		buffer->emit("CITOF F2 I2");
-
-		// restore registers
-		offset = 0;
-		for (int i = 0; i < maxRegs; i++){ //restore all registers back exept of returned value (already restored)
-			if (i == 2){
-				offset += 4;
-				continue;
-			}
-			if (i < currScopeFloatRegNum){
-				buffer->emit("LOADF F" + intToString(i) + " F2 " + intToString(offset));
-			}
-			if (i < currScopeIntRegNum){
-				buffer->emit("LOADI I" + intToString(i) + " I2 " + intToString(offset));
-			}
+		else if (paramTypes[i] == float_){
 			offset += 4;
+			paramsCurrentOffset -= 4;
 		}
-
-		if (functionTable[funcName].returnType == int_){
-			currScopeIntRegNum++;
-		}
-		else if (functionTable[funcName].returnType == float_){
-			currScopeFloatRegNum++;
-		}
-
+		paramOffsets.push_back(paramsCurrentOffset);
 	}
+
+	buffer->emit("ADD2I I2 I2 " + intToString(offset));
+	currScopeOffset += offset;
+
+	buffer->emit("COPYI I1 I2");
+	buffer->emit("CITOF F1 I1");
+    for (int i = 0; i < paramCount; i++){
+		if (paramTypes[i] == int_){
+			buffer->emit("STORI I" + intToString(paramRegs[i]) + " I1 " + intToString(paramOffsets[i]));
+		}
+		else if (paramTypes[i] == float_){
+			buffer->emit("STORF F" + intToString(paramRegs[i]) + " F1 " + intToString(paramOffsets[i]));
+		}
+	}
+
+    // Make function call
+    functionTable[funcName].callingLines.push_back(buffer->nextQuad());
+    buffer->emit("JLINK ");
+
+    // Function return handling
+    buffer->emit("COPYI I2 I1");
+    if (callFunc.returnType == int_) {
+        $$.type = int_;
+        $$.RegNum = currScopeIntRegNum;
+        buffer->emit("LOADI I" + intToString($$.RegNum) + " I1 -4");
+    } else if (callFunc.returnType == float_) {
+        $$.type = float_;
+        $$.RegNum = currScopeFloatRegNum;
+        buffer->emit("CITOF F1 I1");
+        buffer->emit("LOADF F" + intToString($$.RegNum) + " F1 -4");
+    } else {
+        $$.type = void_t;
+    }
+
+    // Restore stack and registers
+    buffer->emit("SUBTI I2 I2 " + intToString(offset));
+    buffer->emit("CITOF F2 I2");
+
+    // Restore registers
+    offset = 0;
+    for (int i = 0; i < maxRegs; i++) {
+        if (i == 2) {
+            offset += 4;
+            continue;
+        }
+        if (i < currScopeFloatRegNum) {
+            buffer->emit("LOADF F" + intToString(i) + " F2 " + intToString(offset));
+        }
+        if (i < currScopeIntRegNum) {
+            buffer->emit("LOADI I" + intToString(i) + " I2 " + intToString(offset));
+        }
+        offset += 4;
+    }
+
+    if (callFunc.returnType == int_) {
+        currScopeIntRegNum++;
+    } else if (callFunc.returnType == float_) {
+        currScopeFloatRegNum++;
+    }
+}
 ;
 
 //make sure that the function is a variadic function (maybe not here), make sure EXP is between 0 to number of args
 VA_MATERIALISE : tk_va_arg '(' TYPE ',' EXP ')'
-	{
-		if($3.type == void_t){
-			semError("cannot call va_arg with void_t type");
-		}
-        if(!functionTable[currentFunctionName].isVariadic){
-            semError("va_arg can only be used in variadic functions");
-        }
-        if($5.RegNum < 0 || $4.RegNum >= functionTable[currentFunctionName].numVariadicParams){
-            semError("Index out of bound in va_arg");
-        }
-        $$.type = $2.type;
-        if ($2.type == int_) {
-            $$.RegNum = currScopeIntRegNum++;
-            buffer->emit("LOADI I" + intToString($$.RegNum) +
-            " I1 " + intToString($4.RegNum * 4 + functionTable[currentFunctionName].startIndexVariadicParams * 4));
-        } else if ($2.type == float_) {
-            $$.RegNum = currScopeFloatRegNum++;
-            buffer->emit("LOADF F" + intToString($$.RegNum) +
-            " I1 " + intToString($4.RegNum * 4 + functionTable[currentFunctionName].startIndexVariadicParams * 4));
-}
-
-
+{ 
+    if($3.type == void_t){
+        semError("cannot call va_arg with void_t type");
+    }
+    if(!functionTable[currentFunctionName].isVariadic){
+        semError("va_arg can only be used in variadic functions");
+    }
+    
+    Function& currentFunc = functionTable[currentFunctionName];
+    
+    // Account for return address (-4) in all offset calculations
+    int countOffset = -(4 + 4 * currentFunc.indexNumVAParams);  // -4 for return address
+    int baseVarArgOffset = -(4 + 4 * (currentFunc.startIndexVariadicParams + 1));
+    
+    // Calculate final offset
+    int offsetReg = currScopeIntRegNum++;
+    buffer->emit("MULTI I" + intToString(offsetReg) + " I" + intToString($5.RegNum) + " 4");
+    buffer->emit("ADD2I I" + intToString(offsetReg) + " I" + intToString(offsetReg) + " " + intToString(-baseVarArgOffset));
+    buffer->emit("SUBTI I" + intToString(offsetReg) + " 0 I" + intToString(offsetReg));
+    
+    $$.type = $3.type;
+    if ($3.type == int_) {
+        $$.RegNum = currScopeIntRegNum++;
+        buffer->emit("LOADI I" + intToString($$.RegNum) + " I1 I" + intToString(offsetReg));
+    } else if ($3.type == float_) {
+        $$.RegNum = currScopeFloatRegNum++;
+        buffer->emit("LOADF F" + intToString($$.RegNum) + " I1 I" + intToString(offsetReg));
+    }
 }
 ;
 
