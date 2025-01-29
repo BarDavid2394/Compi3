@@ -190,6 +190,11 @@ FUNC_DEC_API : TYPE tk_id '(' ')' ';'
 			newFunction.paramTypes = tempParamTypes;
 			newFunction.isVariadic = true;
 			functionTable[$2.name] = newFunction;
+			
+			Type numVaParamType = functionTable[$2.name].paramTypes[tempParamTypes.size() - 1];
+			if(numVaParamType != int_ ){
+				semError("Argument holds the number of variadic parameters is incompatible type");
+			}
 
 			currParamInOrder.clear();
 			// return current scope offset
@@ -318,6 +323,11 @@ FUNC_DEF_API : TYPE tk_id '(' ')'
 			newFunction.paramTypes = tempParamTypes;
 			newFunction.isVariadic = true;
 			functionTable[$2.name] = newFunction;
+
+			Type numVaParamType = functionTable[$2.name].paramTypes[tempParamTypes.size() - 1];
+			if(numVaParamType != int_ ){
+				semError("Argument holds the number of variadic parameters is incompatible type");
+			}
 
 			currParamInOrder.clear();
 			// return current scope offset
@@ -954,21 +964,44 @@ CALL : tk_id '(' CALL_ARGS ')'
         }
 		VAparams = numberOfArgs - fixedParamCount;
         functionTable[funcName].numVariadicParams = VAparams;
+		
     } else if (numberOfArgs != expectedNumOfArgs) {
         semError("Mismatch in number of args in call of function '" + funcName + "'");
     }
-
+	
     // Type checking
     for (int i = 0; i < (callFunc.isVariadic ? expectedNumOfArgs : numberOfArgs); i++) {
         if ($3.paramTypes[i] != callFunc.paramTypes[i]) {
             semError("Mismatch type of argument in call of function '" + funcName + "'");
         }
     }
+	
+	if(callFunc.isVariadic){
+
+		int indexVAnum = functionTable[funcName].indexNumVAParams;
+		int numVAparamReg = currScopeIntRegNum++;
+
+		buffer->emit("ADD2I I" + intToString(numVAparamReg) + " I" + intToString($3.paramRegs[indexVAnum]) + " 0");
+		
+		int equal = currScopeIntRegNum ++;
+ 		buffer->emit("SEQUI I" + intToString(equal) + " I" + intToString(numVAparamReg) + " " + intToString(VAparams));
+
+	
+		string runTimeError = "runtime error!";
+		int nextOPnoError = buffer->nextQuad() + runTimeError.length() + 3;
+		//check the expexted number of variadic arguments are equal to the number of  variadic arguments passed
+		buffer->emit("BNEQZ I" + intToString(equal) + " " + intToString(nextOPnoError));
+
+		for (char c: runTimeError) {
+			int asciivalue =  static_cast<int>(c);
+        	buffer->emit("PRNTC " + std::to_string(asciivalue));
+    	}
+    	buffer->emit("PRNTC " + std::to_string('\n'));
+		buffer->emit("HALT");
+	}
 
     // Save current registers
     int offset = 0;
-	//int tempReg = currentScopeRegsNumInt++;
-	//buffer->emit("COPYI I" + intToString(tempReg) + " " + intToString(VAparams));
 
     buffer->emit("CITOF F2 I2");
     int maxRegs = max(currScopeIntRegNum, currScopeFloatRegNum);
@@ -979,7 +1012,7 @@ CALL : tk_id '(' CALL_ARGS ')'
         }
         if (i < currScopeFloatRegNum) {
             buffer->emit("STORF F" + intToString(i) + " F2 " + intToString(offset));
-        }
+		}
         offset += 4;
     }
     
@@ -1077,9 +1110,35 @@ VA_MATERIALISE : tk_va_arg '(' TYPE ',' EXP ')'
     Function& currentFunc = functionTable[currentFunctionName];
     
     // Account for return address (-4) in all offset calculations
-    int countOffset = -(4 + 4 * currentFunc.indexNumVAParams);  // -4 for return address
+    int countOffset = -( 4 * (currentFunc.startIndexVariadicParams + 1));  // -4 for return address
     int baseVarArgOffset = -(4 + 4 * (currentFunc.startIndexVariadicParams + 1));
-    
+
+	//check $5.RegNum is in bounds
+    int numVAparamReg = currScopeIntRegNum ++;
+	buffer->emit("LOADI I" + intToString(numVAparamReg) + " I1 " + intToString(countOffset));
+	buffer->emit("SUBTI I" + intToString(numVAparamReg) + " I" + intToString(numVAparamReg) + " 1" );
+
+
+	int checkUpperBoundReg = currScopeIntRegNum ++;
+ 	buffer->emit("SGRTI I" + intToString(checkUpperBoundReg) + " I" + intToString($5.RegNum) + " I" + intToString(numVAparamReg));
+
+	int checkBottomBoundReg = currScopeIntRegNum ++;
+	buffer->emit("SLETI I" + intToString(checkBottomBoundReg) + " I" + intToString($5.RegNum) + " 0");
+	
+	string runTimeError = "runtime error!";
+	int nextOPnoError = buffer->nextQuad() + runTimeError.length() + 4;
+	//check if one of the conditions is 1- if the addition os bigger than 0- one of the condition make us jump
+	buffer->emit("ADD2I I" + intToString(checkUpperBoundReg) + " I" + intToString(checkUpperBoundReg) + " I" + intToString(checkBottomBoundReg));
+	//
+	buffer->emit("BREQZ I" + intToString(checkUpperBoundReg) + " " + intToString(nextOPnoError));
+
+	for (char c: runTimeError) {
+		int asciivalue =  static_cast<int>(c);
+        buffer->emit("PRNTC " + std::to_string(asciivalue));
+    }
+    buffer->emit("PRNTC " + std::to_string('\n'));
+	buffer->emit("HALT");
+
     // Calculate final offset
     int offsetReg = currScopeIntRegNum++;
     buffer->emit("MULTI I" + intToString(offsetReg) + " I" + intToString($5.RegNum) + " 4");
