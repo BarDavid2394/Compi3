@@ -96,9 +96,6 @@ class Function {
 
 		// List of all the addresses in .rsk file where the function is being called
 		vector<int> callingLines;
-		
-		// List of parameters' id in function's defenition
-		vector<string>  paramIds;
 	
 		// Function's return type
 		Type returnType;

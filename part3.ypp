@@ -107,6 +107,7 @@ FUNC_DEC_API : TYPE tk_id '(' ')' ';'
 			newFunction.returnType = $1.type;
 			newFunction.startIndexVariadicParams = 0;
 			newFunction.indexNumVAParams = 0;
+			newFunction.numVariadicParams = -1;
 			newFunction.isDefined = false;
 			newFunction.paramTypes.clear();
 			newFunction.isVariadic = false;
@@ -143,6 +144,7 @@ FUNC_DEC_API : TYPE tk_id '(' ')' ';'
 			newFunction.returnType = $1.type;
 			newFunction.startIndexVariadicParams = 0;
 			newFunction.indexNumVAParams = 0;
+			newFunction.numVariadicParams = -1;
 			newFunction.isDefined = false;
 			newFunction.paramTypes = tempParamTypes;
 			newFunction.isVariadic = false;
@@ -228,6 +230,7 @@ FUNC_DEF_API : TYPE tk_id '(' ')'
 			newFunction.startLineImplementation = buffer->nextQuad();
 			newFunction.startIndexVariadicParams = 0;
 			newFunction.indexNumVAParams = 0;
+			newFunction.numVariadicParams = -1;
 			newFunction.isDefined = false;
 			newFunction.paramTypes.clear();
 			newFunction.isVariadic = false;
@@ -269,6 +272,7 @@ FUNC_DEF_API : TYPE tk_id '(' ')'
 			newFunction.returnType = $1.type;
 			newFunction.startIndexVariadicParams = 0;
 			newFunction.indexNumVAParams = 0;
+			newFunction.numVariadicParams = -1;
 			newFunction.startLineImplementation = buffer->nextQuad();
 			newFunction.isDefined = false;
 			newFunction.paramTypes = tempParamTypes;
